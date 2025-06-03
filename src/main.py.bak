@@ -1,0 +1,301 @@
+import pygame
+import sys
+import os
+from game_state import GameState
+from recipe import Recipe
+from ingredient import Ingredient
+from mini_games import ChoppingGame, MixingGame, ServingGame
+
+# Initialize Pygame
+pygame.init()
+pygame.mixer.init()
+pygame.font.init()
+
+# Game constants
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
+FPS = 60
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+ORANGE = (255, 165, 0)
+
+# Get the absolute path to the game directory
+game_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Telugu font
+# Use system font that supports Telugu or fallback to default
+print("Using system font for Telugu text")
+telugu_font = pygame.font.SysFont("Arial Unicode MS, Nirmala UI, Mangal, Latha", 24)
+small_telugu_font = pygame.font.SysFont("Arial Unicode MS, Nirmala UI, Mangal, Latha", 18)
+
+class TeluguCookingGame:
+    def __init__(self):
+        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        pygame.display.set_caption("తెలుగు వంటకాలు - Telugu Cooking Game")
+        self.clock = pygame.time.Clock()
+        self.game_state = GameState()
+        
+        # Load recipes
+        self.recipes = [
+            Recipe("పులిహోర", ["బియ్యం", "పసుపు", "నిమ్మకాయ", "కారం", "వేరుశెనగ", "ఆవాలు", "కరివేపాకు"], 
+                  "బియ్యం ఉడికించి, నిమ్మకాయ రసం, పసుపు, కారం, వేరుశెనగ, ఆవాలు, కరివేపాకు కలపండి."),
+            Recipe("పప్పు", ["కందిపప్పు", "పసుపు", "ఉల్లిపాయలు", "టమాటా", "కారం", "కొత్తిమీర"], 
+                  "కందిపప్పు ఉడికించి, ఉల్లిపాయలు, టమాటా, పసుపు, కారం, కొత్తిమీర కలపండి."),
+            Recipe("పెరుగు", ["పెరుగు", "ఉప్పు", "కారం", "కొత్తిమీర"], 
+                  "పెరుగులో ఉప్పు, కారం, కొత్తిమీర కలపండి.")
+        ]
+        
+        # Load ingredients
+        self.ingredients = [
+            Ingredient("బియ్యం", "rice.png"),
+            Ingredient("పసుపు", "turmeric.png"),
+            Ingredient("నిమ్మకాయ", "lemon.png"),
+            Ingredient("కారం", "chili.png"),
+            Ingredient("వేరుశెనగ", "peanuts.png"),
+            Ingredient("ఆవాలు", "mustard.png"),
+            Ingredient("కరివేపాకు", "curry_leaves.png"),
+            Ingredient("కందిపప్పు", "dal.png"),
+            Ingredient("ఉల్లిపాయలు", "onion.png"),
+            Ingredient("టమాటా", "tomato.png"),
+            Ingredient("కొత్తిమీర", "coriander.png"),
+            Ingredient("పెరుగు", "placeholder.png"),
+            Ingredient("ఉప్పు", "placeholder.png"),
+        ]
+        
+        # Current recipe and game state
+        self.current_recipe_index = 0
+        self.current_recipe = self.recipes[self.current_recipe_index]
+        self.selected_ingredients = []
+        self.cooking_stage = "select"  # select, chop, mix, serve
+        self.mini_game = None
+        self.score = 0
+        
+        # Buttons
+        self.start_button_rect = pygame.Rect(300, 400, 200, 50)
+        self.next_button_rect = pygame.Rect(600, 500, 150, 50)
+        
+        # Load sounds
+        try:
+            sound_path_success = os.path.join(game_dir, "sounds", "success.wav")
+            sound_path_error = os.path.join(game_dir, "sounds", "error.wav")
+            self.success_sound = pygame.mixer.Sound(sound_path_success)
+            self.error_sound = pygame.mixer.Sound(sound_path_error)
+        except:
+            print("Sound files not found or invalid.")
+            self.success_sound = None
+            self.error_sound = None
+    
+    def create_placeholder_ingredients(self):
+        """Create ingredients with placeholder images instead of loading from files"""
+        # This method is no longer used but kept for reference
+        ingredient_names = [
+            "బియ్యం", "పసుపు", "నిమ్మకాయ", "కారం", "వేరుశెనగ", "ఆవాలు", 
+            "కరివేపాకు", "కందిపప్పు", "ఉల్లిపాయలు", "టమాటా", "కొత్తిమీర", 
+            "పెరుగు", "ఉప్పు"
+        ]
+        
+        ingredients = []
+        for name in ingredient_names:
+            ingredient = Ingredient(name, "placeholder.png")
+            ingredients.append(ingredient)
+        
+        return ingredients
+    
+    def run(self):
+        running = True
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                self.handle_event(event)
+            
+            self.update()
+            self.draw()
+            
+            pygame.display.flip()
+            self.clock.tick(FPS)
+        
+        pygame.quit()
+        sys.exit()
+    
+    def handle_event(self, event):
+        if self.game_state.current_state == "menu":
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if self.start_button_rect.collidepoint(event.pos):
+                    self.game_state.set_state("recipe_selection")
+        
+        elif self.game_state.current_state == "recipe_selection":
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                # Check if a recipe was clicked
+                for i, recipe in enumerate(self.recipes):
+                    rect = pygame.Rect(200, 150 + i * 100, 400, 80)
+                    if rect.collidepoint(event.pos):
+                        self.current_recipe_index = i
+                        self.current_recipe = self.recipes[i]
+                        self.game_state.set_state("cooking")
+                        self.cooking_stage = "select"
+                        self.selected_ingredients = []
+        
+        elif self.game_state.current_state == "cooking":
+            if self.cooking_stage == "select":
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    # Check if an ingredient was clicked
+                    for ingredient in self.ingredients:
+                        # Calculate position based on index
+                        idx = self.ingredients.index(ingredient)
+                        x = 100 + (idx % 5) * 100
+                        y = 150 + (idx // 5) * 100
+                        rect = pygame.Rect(x, y, 64, 64)
+                        
+                        if rect.collidepoint(event.pos):
+                            if ingredient.name in self.current_recipe.ingredients:
+                                if ingredient.name not in [i.name for i in self.selected_ingredients]:
+                                    self.selected_ingredients.append(ingredient)
+                                    if self.success_sound:
+                                        self.success_sound.play()
+                            else:
+                                if self.error_sound:
+                                    self.error_sound.play()
+                    
+                    # Check if all ingredients are selected
+                    if len(self.selected_ingredients) == len(self.current_recipe.ingredients):
+                        self.cooking_stage = "chop"
+                        self.mini_game = ChoppingGame()
+            
+            elif self.cooking_stage == "chop":
+                if self.mini_game:
+                    result = self.mini_game.handle_event(event)
+                    if result == "completed":
+                        self.cooking_stage = "mix"
+                        self.mini_game = MixingGame()
+            
+            elif self.cooking_stage == "mix":
+                if self.mini_game:
+                    result = self.mini_game.handle_event(event)
+                    if result == "completed":
+                        self.cooking_stage = "serve"
+                        self.mini_game = ServingGame()
+            
+            elif self.cooking_stage == "serve":
+                if self.mini_game:
+                    result = self.mini_game.handle_event(event)
+                    if result == "completed":
+                        self.score += 100
+                        self.game_state.set_state("result")
+            
+            # Next button
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if self.next_button_rect.collidepoint(event.pos):
+                    if self.cooking_stage == "select" and len(self.selected_ingredients) == len(self.current_recipe.ingredients):
+                        self.cooking_stage = "chop"
+                        self.mini_game = ChoppingGame()
+                    elif self.cooking_stage == "chop" and self.mini_game and self.mini_game.is_completed():
+                        self.cooking_stage = "mix"
+                        self.mini_game = MixingGame()
+                    elif self.cooking_stage == "mix" and self.mini_game and self.mini_game.is_completed():
+                        self.cooking_stage = "serve"
+                        self.mini_game = ServingGame()
+                    elif self.cooking_stage == "serve" and self.mini_game and self.mini_game.is_completed():
+                        self.score += 100
+                        self.game_state.set_state("result")
+        
+        elif self.game_state.current_state == "result":
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if self.next_button_rect.collidepoint(event.pos):
+                    self.game_state.set_state("recipe_selection")
+    
+    def update(self):
+        if self.game_state.current_state == "cooking":
+            if self.mini_game:
+                self.mini_game.update()
+    
+    def draw(self):
+        self.screen.fill(WHITE)
+        
+        if self.game_state.current_state == "menu":
+            self.draw_menu()
+        elif self.game_state.current_state == "recipe_selection":
+            self.draw_recipe_selection()
+        elif self.game_state.current_state == "cooking":
+            self.draw_cooking()
+        elif self.game_state.current_state == "result":
+            self.draw_result()
+        
+        # Draw score
+        score_text = telugu_font.render(f"స్కోరు: {self.score}", True, BLACK)
+        self.screen.blit(score_text, (650, 20))
+    
+    def draw_menu(self):
+        title = telugu_font.render("తెలుగు వంటకాలు - Telugu Cooking Game", True, BLACK)
+        self.screen.blit(title, (200, 100))
+        
+        pygame.draw.rect(self.screen, ORANGE, self.start_button_rect)
+        start_text = telugu_font.render("ప్రారంభించండి", True, BLACK)
+        self.screen.blit(start_text, (320, 410))
+    
+    def draw_recipe_selection(self):
+        title = telugu_font.render("వంటకం ఎంచుకోండి", True, BLACK)
+        self.screen.blit(title, (300, 50))
+        
+        for i, recipe in enumerate(self.recipes):
+            rect = pygame.Rect(200, 150 + i * 100, 400, 80)
+            pygame.draw.rect(self.screen, ORANGE, rect)
+            recipe_text = telugu_font.render(recipe.name, True, BLACK)
+            self.screen.blit(recipe_text, (220, 170 + i * 100))
+    
+    def draw_cooking(self):
+        # Draw recipe name
+        recipe_text = telugu_font.render(f"వంటకం: {self.current_recipe.name}", True, BLACK)
+        self.screen.blit(recipe_text, (50, 50))
+        
+        if self.cooking_stage == "select":
+            # Draw instructions
+            instructions = telugu_font.render("పదార్థాలు ఎంచుకోండి", True, BLACK)
+            self.screen.blit(instructions, (50, 100))
+            
+            # Draw ingredients
+            for i, ingredient in enumerate(self.ingredients):
+                x = 100 + (i % 5) * 100
+                y = 150 + (i // 5) * 100
+                self.screen.blit(ingredient.image, (x, y))
+                
+                # Draw ingredient name
+                name_text = small_telugu_font.render(ingredient.name, True, BLACK)
+                self.screen.blit(name_text, (x, y + 70))
+            
+            # Draw selected ingredients
+            for i, ingredient in enumerate(self.selected_ingredients):
+                x = 100 + i * 70
+                y = 450
+                self.screen.blit(ingredient.image, (x, y))
+            
+            # Draw next button if all ingredients are selected
+            if len(self.selected_ingredients) == len(self.current_recipe.ingredients):
+                pygame.draw.rect(self.screen, ORANGE, self.next_button_rect)
+                next_text = telugu_font.render("తరువాత", True, BLACK)
+                self.screen.blit(next_text, (620, 510))
+        
+        elif self.cooking_stage in ["chop", "mix", "serve"]:
+            if self.mini_game:
+                self.mini_game.draw(self.screen)
+                
+                # Draw next button if mini-game is completed
+                if self.mini_game.is_completed():
+                    pygame.draw.rect(self.screen, ORANGE, self.next_button_rect)
+                    next_text = telugu_font.render("తరువాత", True, BLACK)
+                    self.screen.blit(next_text, (620, 510))
+    
+    def draw_result(self):
+        result_text = telugu_font.render(f"{self.current_recipe.name} సిద్ధంగా ఉంది!", True, BLACK)
+        self.screen.blit(result_text, (250, 200))
+        
+        score_text = telugu_font.render(f"మీరు {self.score} పాయింట్లు సంపాదించారు", True, BLACK)
+        self.screen.blit(score_text, (200, 250))
+        
+        pygame.draw.rect(self.screen, ORANGE, self.next_button_rect)
+        next_text = telugu_font.render("తరువాత", True, BLACK)
+        self.screen.blit(next_text, (620, 510))
+
+if __name__ == "__main__":
+    game = TeluguCookingGame()
+    game.run()

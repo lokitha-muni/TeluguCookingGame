@@ -1,0 +1,12 @@
+New ingredients to add:
+1. కొబ్బరి (Coconut)
+2. మిరియాలు (Black Pepper)
+
+New recipes to add:
+1. కొబ్బరి పాయసం (Coconut Payasam)
+2. మిరియాల రసం (Pepper Soup)
+
+Background images needed:
+1. kitchen_background.png
+2. traditional_kitchen_background.png
+3. modern_kitchen_background.png
